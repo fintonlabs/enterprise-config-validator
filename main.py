@@ -1,97 +1,107 @@
-import os
 import json
 import yaml
-from typing import Dict, List, Union
+import jsonschema
+from typing import Dict, Any
 from jsonschema import validate, ValidationError
-from jsonschema.exceptions import SchemaError
 
 
-class Error:
+class ConfigurationValidator:
     """
-    Class representing an error in a configuration file.
-    """
+    A class used to validate configuration files in JSON and YAML formats.
 
-    def __init__(self, line: int, error_type: str, message: str):
-        self.line = line
-        self.error_type = error_type
-        self.message = message
+    Attributes
+    ----------
+    schema : dict
+        a dictionary representing the validation schema
 
-
-class ConfigurationFile:
-    """
-    Class representing a configuration file.
-    """
-
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-        self.format = self._get_file_format()
-        self.content = self._load_file()
-        self.errors = []
-
-    def _get_file_format(self) -> str:
-        _, ext = os.path.splitext(self.file_path)
-        return ext[1:]
-
-    def _load_file(self) -> Union[Dict, List]:
-        try:
-            with open(self.file_path, 'r') as file:
-                if self.format == 'json':
-                    return json.load(file)
-                elif self.format == 'yaml':
-                    return yaml.safe_load(file)
-        except (json.JSONDecodeError, yaml.YAMLError) as e:
-            self.errors.append(Error(e.lineno, 'syntax', str(e)))
-            return None
-
-
-class Schema:
-    """
-    Class representing a schema against which configuration files are validated.
+    Methods
+    -------
+    load_file(file_path: str) -> Dict[str, Any]
+        loads a configuration file and returns it as a dictionary
+    validate_file(file_data: Dict[str, Any]) -> None
+        validates a configuration file against the schema
     """
 
-    def __init__(self, schema_path: str):
-        self.schema = self._load_schema(schema_path)
+    def __init__(self, schema: Dict[str, Any]) -> None:
+        """
+        Constructs all the necessary attributes for the ConfigurationValidator object.
 
-    def _load_schema(self, schema_path: str) -> Dict:
-        with open(schema_path, 'r') as file:
-            return json.load(file)
-
-
-class Validator:
-    """
-    Class for validating configuration files against a schema.
-    """
-
-    def __init__(self, schema: Schema):
+        Parameters
+        ----------
+        schema : dict
+            a dictionary representing the validation schema
+        """
         self.schema = schema
-        self.report = {
-            'total_files': 0,
-            'files_with_errors': 0,
-            'total_errors': 0,
-            'files': []
-        }
 
-    def validate(self, config_files: List[ConfigurationFile]) -> Dict:
-        for config_file in config_files:
-            self.report['total_files'] += 1
-            if config_file.content is not None:
-                try:
-                    validate(instance=config_file.content, schema=self.schema.schema)
-                except (ValidationError, SchemaError) as e:
-                    config_file.errors.append(Error(e.absolute_path, 'compliance', str(e)))
-                    self.report['files_with_errors'] += 1
-                    self.report['total_errors'] += 1
-            self.report['files'].append(config_file)
-        return self.report
+    def load_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        Loads a configuration file and returns it as a dictionary.
+
+        Parameters
+        ----------
+        file_path : str
+            the path of the configuration file
+
+        Returns
+        -------
+        dict
+            a dictionary representing the configuration file
+        """
+        try:
+            if file_path.endswith('.json'):
+                with open(file_path, 'r') as file:
+                    return json.load(file)
+            elif file_path.endswith('.yaml') or file_path.endswith('.yml'):
+                with open(file_path, 'r') as file:
+                    return yaml.safe_load(file)
+            else:
+                raise ValueError('Unsupported file format. Only JSON and YAML files are supported.')
+        except (json.JSONDecodeError, yaml.YAMLError) as e:
+            print(f'Syntax error in file {file_path}: {e}')
+            return {}
+        except FileNotFoundError as e:
+            print(f'File not found: {file_path}')
+            return {}
+
+    def validate_file(self, file_data: Dict[str, Any]) -> None:
+        """
+        Validates a configuration file against the schema.
+
+        Parameters
+        ----------
+        file_data : dict
+            a dictionary representing the configuration file
+
+        Raises
+        ------
+        ValidationError
+            if the configuration file does not comply with the schema
+        """
+        try:
+            validate(instance=file_data, schema=self.schema)
+            print('File is valid.')
+        except ValidationError as e:
+            print(f'Compliance error: {e.message}')
 
 
-def main():
-    schema = Schema('schema.json')
-    validator = Validator(schema)
-    config_files = [ConfigurationFile(file) for file in ['config1.json', 'config2.yaml']]
-    report = validator.validate(config_files)
-    print(report)
+# Example usage
+if __name__ == "__main__":
+    # Define a simple schema for demonstration purposes
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "age": {"type": "number"}
+        },
+        "required": ["name", "age"]
+    }
 
+    validator = ConfigurationValidator(schema)
 
-if __name__ == '__main__':
-    main()
+    # Load and validate a JSON file
+    file_data = validator.load_file('config.json')
+    validator.validate_file(file_data)
+
+    # Load and validate a YAML file
+    file_data = validator.load_file('config.yaml')
+    validator.validate_file(file_data)
