@@ -1,40 +1,42 @@
 import unittest
-from main import ConfigurationValidator
+from main import ConfigValidator
 
-class TestConfigurationValidator(unittest.TestCase):
+class TestConfigValidator(unittest.TestCase):
     def setUp(self):
-        self.schema = {
+        self.validator = ConfigValidator({
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
                 "age": {"type": "number"}
             },
             "required": ["name", "age"]
-        }
-        self.validator = ConfigurationValidator(self.schema)
+        })
 
     def test_load_file(self):
         # Test loading a valid JSON file
-        file_data = self.validator.load_file('tests/config.json')
-        self.assertEqual(file_data, {'name': 'John Doe', 'age': 30})
+        data = self.validator.load_file('tests/test.json')
+        self.assertEqual(data, {"name": "John", "age": 30})
 
         # Test loading a valid YAML file
-        file_data = self.validator.load_file('tests/config.yaml')
-        self.assertEqual(file_data, {'name': 'John Doe', 'age': 30})
+        data = self.validator.load_file('tests/test.yaml')
+        self.assertEqual(data, {"name": "John", "age": 30})
 
-        # Test loading a file with an unsupported format
+        # Test loading an unsupported file type
         with self.assertRaises(ValueError):
-            self.validator.load_file('tests/config.txt')
+            self.validator.load_file('tests/test.txt')
 
     def test_validate_file(self):
-        # Test validating a valid file
-        file_data = {'name': 'John Doe', 'age': 30}
-        self.validator.validate_file(file_data)
+        # Test validating a file that meets the schema and custom rules
+        errors = self.validator.validate_file('tests/test.json', {"age": 30})
+        self.assertEqual(errors, [])
 
-        # Test validating an invalid file
-        file_data = {'name': 'John Doe'}
-        with self.assertRaises(ValidationError):
-            self.validator.validate_file(file_data)
+        # Test validating a file that does not meet the schema
+        errors = self.validator.validate_file('tests/invalid.json', {"age": 30})
+        self.assertNotEqual(errors, [])
+
+        # Test validating a file that does not meet the custom rules
+        errors = self.validator.validate_file('tests/test.json', {"age": 31})
+        self.assertNotEqual(errors, [])
 
 if __name__ == '__main__':
     unittest.main()
